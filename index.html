@@ -211,22 +211,56 @@
             to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
 
-        /* Mobile swipe hint - subtle */
-        #swipe-hint {
+        /* Mobile direction pad */
+        #direction-pad {
             position: absolute;
-            bottom: 100px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            color: rgba(255,255,255,0.3);
-            font-size: 0.8rem;
-            letter-spacing: 2px;
-            pointer-events: none;
-            z-index: 5;
+            left: 18px;
+            bottom: 18px;
+            width: 122px;
+            height: 122px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 55%, transparent 100%);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 10px 30px rgba(0,0,0,0.25);
+            z-index: 18;
             display: none;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #direction-pad::before {
+            content: '';
+            position: absolute;
+            inset: 10px;
+            border: 1px dashed rgba(255,255,255,0.28);
+            border-radius: 50%;
+        }
+        #direction-knob {
+            position: absolute;
+            width: 42px;
+            height: 42px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: rgba(255,255,255,0.92);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.35);
+            pointer-events: none;
+        }
+        #direction-pad-label {
+            position: absolute;
+            bottom: -26px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.72);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 1.4px;
+            white-space: nowrap;
         }
         @media (max-width: 768px) {
-            #swipe-hint {
+            #direction-pad {
                 display: block;
             }
             #controls {
@@ -276,7 +310,6 @@
     <div id="info"><h1>🐍 3D SNAKE</h1></div>
     <div id="score">🍎 <span id="score-value">0</span></div>
     <div id="controls"><kbd>⬆</kbd> <kbd>⬇</kbd> <kbd>⬅</kbd> <kbd>➡</kbd> &nbsp; or &nbsp; <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></div>
-    <div id="swipe-hint">⬅️ Swipe to change direction ➡️</div>
     <button id="restart-btn">↻ PLAY AGAIN</button>
     <div id="hud-controls">
         <button id="pause-btn" class="hud-btn">⏸ Pause</button>
@@ -287,7 +320,7 @@
     <div id="start-overlay">
         <div class="overlay-card">
             <h2>Ready to play?</h2>
-            <p>Use arrow keys, WASD, or swipe on mobile to guide the snake.</p>
+            <p>Use arrow keys, WASD, or rotate the circular control on mobile to guide the snake.</p>
             <button id="start-btn">▶ START GAME</button>
         </div>
     </div>
@@ -298,7 +331,10 @@
             <button id="resume-btn" class="hud-btn">▶ Resume</button>
         </div>
     </div>
-    <div id="touch-overlay"></div>
+    <div id="direction-pad" aria-label="Direction pad">
+        <div id="direction-knob"></div>
+        <div id="direction-pad-label">Rotate</div>
+    </div>
 
     <!-- Import Three.js and OrbitControls from CDN -->
     <script type="importmap">
@@ -350,7 +386,8 @@
         const zoomOutBtn = document.getElementById('zoom-out-btn');
         const zoomInBtn = document.getElementById('zoom-in-btn');
         const fitViewBtn = document.getElementById('fit-view-btn');
-        const touchOverlay = document.getElementById('touch-overlay');
+        const directionPad = document.getElementById('direction-pad');
+        const directionKnob = document.getElementById('direction-knob');
 
         // --- Three.js Setup ---
         const scene = new THREE.Scene();
@@ -736,67 +773,59 @@
             setDirection(newDir);
         }
 
-        // --- Touch / Swipe controls (mobile) ---
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let isSwiping = false;
+        // --- Mobile rotational direction pad ---
+        let joystickActive = false;
 
-        function handleTouchStart(e) {
-            e.preventDefault();
-            if (!gameStarted || gameOver) {
-                return;
-            }
-            const touch = e.touches[0];
-            if (!touch) return;
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-            isSwiping = true;
-        }
+        function updateDirectionPad(clientX, clientY) {
+            const rect = directionPad.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const radius = rect.width / 2 - 24;
+            const dx = clientX - centerX;
+            const dy = clientY - centerY;
+            const distance = Math.min(Math.hypot(dx, dy), radius);
+            const angle = Math.atan2(dy, dx);
+            const knobX = Math.cos(angle) * distance;
+            const knobY = Math.sin(angle) * distance;
+            directionKnob.style.transform = `translate(-50%, -50%) translate(${knobX}px, ${knobY}px)`;
 
-        function handleTouchEnd(e) {
-            e.preventDefault();
-            if (!gameStarted) {
-                startGame();
-                isSwiping = false;
-                return;
-            }
-            if (!isSwiping || gameOver) {
-                isSwiping = false;
-                return;
-            }
-            isSwiping = false;
-            // Use the last touch position if available, otherwise fallback to start
-            let endX = touchStartX;
-            let endY = touchStartY;
-            if (e.changedTouches && e.changedTouches.length > 0) {
-                endX = e.changedTouches[0].clientX;
-                endY = e.changedTouches[0].clientY;
-            }
-            const dx = endX - touchStartX;
-            const dy = endY - touchStartY;
-            const absDx = Math.abs(dx);
-            const absDy = Math.abs(dy);
-
-            // Minimum swipe distance to trigger (prevents accidental taps)
-            const minSwipe = 30;
-            if (Math.max(absDx, absDy) < minSwipe) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < 10) {
                 return;
             }
 
             let newDir = null;
-            if (absDx > absDy) {
-                // Horizontal swipe
+            if (Math.abs(dx) > Math.abs(dy)) {
                 newDir = dx > 0 ? [1, 0] : [-1, 0];
             } else {
-                // Vertical swipe
                 newDir = dy > 0 ? [0, 1] : [0, -1];
             }
             setDirection(newDir);
         }
 
-        // Also handle touchmove to prevent scrolling during swipe
-        function handleTouchMove(e) {
+        function handleJoystickStart(e) {
             e.preventDefault();
+            if (!gameStarted && !gameOver) {
+                startGame();
+            }
+            if (!gameStarted || gameOver || isPaused) {
+                return;
+            }
+            joystickActive = true;
+            directionPad.setPointerCapture(e.pointerId);
+            updateDirectionPad(e.clientX, e.clientY);
+        }
+
+        function handleJoystickMove(e) {
+            if (!joystickActive) return;
+            e.preventDefault();
+            updateDirectionPad(e.clientX, e.clientY);
+        }
+
+        function handleJoystickEnd(e) {
+            if (!joystickActive) return;
+            e.preventDefault();
+            joystickActive = false;
+            directionKnob.style.transform = 'translate(-50%, -50%)';
         }
 
         // --- Resize handler ---
@@ -839,15 +868,11 @@
             // Keyboard
             window.addEventListener('keydown', handleKey);
             
-            // Touch events (mobile)
-            touchOverlay.addEventListener('touchstart', handleTouchStart, { passive: false });
-            touchOverlay.addEventListener('touchmove', handleTouchMove, { passive: false });
-            touchOverlay.addEventListener('touchend', handleTouchEnd, { passive: false });
-            // Also handle touchcancel to reset state
-            touchOverlay.addEventListener('touchcancel', (e) => {
-                e.preventDefault();
-                isSwiping = false;
-            }, { passive: false });
+            // Mobile rotational direction pad
+            directionPad.addEventListener('pointerdown', handleJoystickStart);
+            directionPad.addEventListener('pointermove', handleJoystickMove);
+            directionPad.addEventListener('pointerup', handleJoystickEnd);
+            directionPad.addEventListener('pointercancel', handleJoystickEnd);
 
             // Start and restart actions
             startBtn.addEventListener('click', startGame);
