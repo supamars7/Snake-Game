@@ -397,6 +397,16 @@
         camera.position.set(12, 14, 18);
         camera.lookAt(0, 0, 0);
 
+        function updateCameraForViewport() {
+            const isMobile = window.innerWidth <= 768;
+            const targetDistance = isMobile ? 20 : 18;
+            const targetHeight = isMobile ? 16 : 14;
+            camera.position.set(targetDistance, targetHeight, targetDistance);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
@@ -833,6 +843,7 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            updateCameraForViewport();
         });
 
         // --- Animation loop ---
@@ -882,6 +893,7 @@
             zoomOutBtn.addEventListener('click', () => zoomCamera(-1));
             zoomInBtn.addEventListener('click', () => zoomCamera(1));
             fitViewBtn.addEventListener('click', fitView);
+            updateCameraForViewport();
             
             animate();
         }
