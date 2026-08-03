@@ -2,15 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>3D Stunning Snake Game - Three.js</title>
     <style>
-        body {
+        html, body {
             margin: 0;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
+            position: fixed;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             touch-action: none;
-            /* Prevent default touch behaviors like scroll/pinch */;
+            -webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior: none;
+        }
+        body {
+            min-height: 100dvh;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
         }
         #info {
             position: absolute;
@@ -108,6 +121,91 @@
             display: block;
             animation: fadeInUp 0.5s ease forwards;
         }
+        #start-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+            background: rgba(4, 6, 20, 0.78);
+            backdrop-filter: blur(8px);
+            z-index: 30;
+        }
+        #start-overlay.hidden {
+            display: none;
+        }
+        .overlay-card {
+            width: min(92vw, 360px);
+            padding: 28px 24px;
+            border-radius: 24px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+            text-align: center;
+            color: #fff;
+        }
+        .overlay-card h2 {
+            margin: 0 0 10px;
+            font-size: 1.6rem;
+            letter-spacing: 1px;
+        }
+        .overlay-card p {
+            margin: 0 0 18px;
+            color: rgba(255,255,255,0.8);
+            line-height: 1.5;
+        }
+        #start-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #ffd700, #ff8c42);
+            color: #191919;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(255, 215, 0, 0.28);
+        }
+        #hud-controls {
+            position: absolute;
+            right: 18px;
+            bottom: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            z-index: 20;
+        }
+        .hud-btn {
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 999px;
+            padding: 10px 12px;
+            background: rgba(10, 14, 28, 0.8);
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            backdrop-filter: blur(6px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        }
+        .hud-btn:active {
+            transform: scale(0.97);
+        }
+        #pause-overlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+            background: rgba(4, 6, 20, 0.72);
+            backdrop-filter: blur(8px);
+            z-index: 25;
+        }
+        #pause-overlay.show {
+            display: flex;
+        }
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateX(-50%) translateY(20px); }
             to { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -180,6 +278,26 @@
     <div id="controls"><kbd>⬆</kbd> <kbd>⬇</kbd> <kbd>⬅</kbd> <kbd>➡</kbd> &nbsp; or &nbsp; <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></div>
     <div id="swipe-hint">⬅️ Swipe to change direction ➡️</div>
     <button id="restart-btn">↻ PLAY AGAIN</button>
+    <div id="hud-controls">
+        <button id="pause-btn" class="hud-btn">⏸ Pause</button>
+        <button id="zoom-out-btn" class="hud-btn">−</button>
+        <button id="zoom-in-btn" class="hud-btn">+</button>
+        <button id="fit-view-btn" class="hud-btn">⤢</button>
+    </div>
+    <div id="start-overlay">
+        <div class="overlay-card">
+            <h2>Ready to play?</h2>
+            <p>Use arrow keys, WASD, or swipe on mobile to guide the snake.</p>
+            <button id="start-btn">▶ START GAME</button>
+        </div>
+    </div>
+    <div id="pause-overlay">
+        <div class="overlay-card">
+            <h2>Paused</h2>
+            <p>Take your time to inspect the board, then resume when ready.</p>
+            <button id="resume-btn" class="hud-btn">▶ Resume</button>
+        </div>
+    </div>
     <div id="touch-overlay"></div>
 
     <!-- Import Three.js and OrbitControls from CDN -->
@@ -218,10 +336,20 @@
         let gameOver = false;
         let gameLoopInterval = null;
         let isGameActive = false;
+        let gameStarted = false;
+        let isPaused = false;
 
         // --- DOM refs ---
         const scoreSpan = document.getElementById('score-value');
         const restartBtn = document.getElementById('restart-btn');
+        const startOverlay = document.getElementById('start-overlay');
+        const startBtn = document.getElementById('start-btn');
+        const pauseOverlay = document.getElementById('pause-overlay');
+        const pauseBtn = document.getElementById('pause-btn');
+        const resumeBtn = document.getElementById('resume-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const fitViewBtn = document.getElementById('fit-view-btn');
         const touchOverlay = document.getElementById('touch-overlay');
 
         // --- Three.js Setup ---
@@ -431,7 +559,7 @@
 
         // --- Game logic ---
         function updateGame() {
-            if (gameOver) return;
+            if (gameOver || !gameStarted || isPaused) return;
 
             direction = [...nextDirection];
 
@@ -496,19 +624,26 @@
         function endGame() {
             if (gameOver) return;
             gameOver = true;
+            gameStarted = false;
             if (gameLoopInterval) {
                 clearInterval(gameLoopInterval);
                 gameLoopInterval = null;
             }
             isGameActive = false;
             restartBtn.classList.add('show');
+            startOverlay.classList.remove('hidden');
             scene.background.setHex(0x2a0a1a);
             setTimeout(() => {
                 scene.background.setHex(0x0f0f1a);
             }, 300);
         }
 
-        function resetGame() {
+        function startGame() {
+            if (gameStarted && !gameOver) return;
+            gameStarted = true;
+            gameOver = false;
+            isPaused = false;
+            isGameActive = true;
             if (gameLoopInterval) {
                 clearInterval(gameLoopInterval);
                 gameLoopInterval = null;
@@ -519,15 +654,48 @@
             food = [15, 10];
             score = 0;
             scoreSpan.textContent = '0';
-            gameOver = false;
-            isGameActive = true;
             restartBtn.classList.remove('show');
+            startOverlay.classList.add('hidden');
+            pauseOverlay.classList.remove('show');
+            pauseBtn.textContent = '⏸ Pause';
             scene.background.setHex(0x0f0f1a);
-            
             renderSnake();
             renderFood();
-            
             gameLoopInterval = setInterval(updateGame, MOVE_INTERVAL_MS);
+        }
+
+        function resetGame() {
+            startGame();
+        }
+
+        function togglePause() {
+            if (!gameStarted || gameOver) return;
+            isPaused = !isPaused;
+            if (isPaused) {
+                if (gameLoopInterval) {
+                    clearInterval(gameLoopInterval);
+                    gameLoopInterval = null;
+                }
+                pauseOverlay.classList.add('show');
+                pauseBtn.textContent = '▶ Resume';
+            } else {
+                pauseOverlay.classList.remove('show');
+                pauseBtn.textContent = '⏸ Pause';
+                gameLoopInterval = setInterval(updateGame, MOVE_INTERVAL_MS);
+            }
+        }
+
+        function zoomCamera(delta) {
+            const zoomFactor = delta > 0 ? 1.1 : 0.9;
+            controls.dollyIn(zoomFactor);
+            controls.update();
+        }
+
+        function fitView() {
+            const distance = 18;
+            camera.position.set(distance, distance * 0.95, distance);
+            controls.target.set(0, 0, 0);
+            controls.update();
         }
 
         // --- Direction setter (with 180° prevention) ---
@@ -543,10 +711,20 @@
         // --- Keyboard controls ---
         function handleKey(e) {
             const key = e.key;
-            if (key.startsWith('Arrow') || key === 'w' || key === 'W' || key === 'a' || key === 'A' || key === 's' || key === 'S' || key === 'd' || key === 'D') {
+            if (key.startsWith('Arrow') || key === 'w' || key === 'W' || key === 'a' || key === 'A' || key === 's' || key === 'S' || key === 'd' || key === 'D' || key === ' ' || key === 'Enter') {
                 e.preventDefault();
             }
+            if (!gameStarted) {
+                if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
+                    startGame();
+                }
+                return;
+            }
             if (gameOver) return;
+            if (key === 'p' || key === 'P') {
+                togglePause();
+                return;
+            }
 
             let newDir = null;
             if (key === 'ArrowUp' || key === 'w' || key === 'W') newDir = [0, -1];
@@ -565,6 +743,9 @@
 
         function handleTouchStart(e) {
             e.preventDefault();
+            if (!gameStarted || gameOver) {
+                return;
+            }
             const touch = e.touches[0];
             if (!touch) return;
             touchStartX = touch.clientX;
@@ -574,6 +755,11 @@
 
         function handleTouchEnd(e) {
             e.preventDefault();
+            if (!gameStarted) {
+                startGame();
+                isSwiping = false;
+                return;
+            }
             if (!isSwiping || gameOver) {
                 isSwiping = false;
                 return;
@@ -645,8 +831,10 @@
             food = [15, 10];
             renderSnake();
             renderFood();
-            isGameActive = true;
-            gameLoopInterval = setInterval(updateGame, MOVE_INTERVAL_MS);
+            isGameActive = false;
+            gameStarted = false;
+            startOverlay.classList.remove('hidden');
+            restartBtn.classList.remove('show');
             
             // Keyboard
             window.addEventListener('keydown', handleKey);
@@ -661,8 +849,14 @@
                 isSwiping = false;
             }, { passive: false });
 
-            // Restart button
+            // Start and restart actions
+            startBtn.addEventListener('click', startGame);
             restartBtn.addEventListener('click', resetGame);
+            pauseBtn.addEventListener('click', togglePause);
+            resumeBtn.addEventListener('click', togglePause);
+            zoomOutBtn.addEventListener('click', () => zoomCamera(-1));
+            zoomInBtn.addEventListener('click', () => zoomCamera(1));
+            fitViewBtn.addEventListener('click', fitView);
             
             animate();
         }
