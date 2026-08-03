@@ -614,9 +614,16 @@
             let newRow = head[0] + direction[1];
             let newCol = head[1] + direction[0];
 
-            if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
-                endGame();
-                return;
+            if (newRow < 0) {
+                newRow = BOARD_SIZE - 1;
+            } else if (newRow >= BOARD_SIZE) {
+                newRow = 0;
+            }
+
+            if (newCol < 0) {
+                newCol = BOARD_SIZE - 1;
+            } else if (newCol >= BOARD_SIZE) {
+                newCol = 0;
             }
 
             const isEating = (newRow === food[0] && newCol === food[1]);
